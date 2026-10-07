@@ -24,13 +24,34 @@ export function createSurface({ scene, groundY, EYE, loadGLTF, perches, waveY })
     const f = { mesh: holder, inner: mesh, yaw: R(0, TAU), spin: R(-0.03, 0.03), ph: R(0, TAU), speed: R(0.6, 1.4), sink: 0, rx: 0, ax: 0, rz: 0, ...o };
     place(f); scene.add(holder); floaters.push(f);
   };
-  // troncos pequeños
-  const barkMat = new THREE.MeshStandardMaterial({ color: 0x5c4a37, roughness: 0.95 }), endMat = new THREE.MeshStandardMaterial({ color: 0x7a6548, roughness: 1 });
-  for (let i = 0; i < 5; i++) {
-    const r = R(0.035, 0.085), L = R(0.4, 1.15), g = new THREE.CylinderGeometry(r, r * R(0.75, 0.95), L, 10, 5), p = g.attributes.position;
-    for (let k = 0; k < p.count; k++) { const y = p.getY(k), w = 1 + 0.12 * Math.sin(y * 9 + i) + 0.08 * Math.sin(Math.atan2(p.getZ(k), p.getX(k)) * 3 + y * 5); p.setX(k, p.getX(k) * w + 0.03 * Math.sin(y * 3 + i) * r * 6); p.setZ(k, p.getZ(k) * w); }
-    g.rotateZ(Math.PI / 2); g.computeVertexNormals();
-    addFloater(new THREE.Mesh(g, [barkMat, endMat, endMat]), { sink: -r * 0.22, ax: 0.14, rz: R(-0.015, 0.015), minD: 6 });   // flotan con más de la mitad fuera
+  // troncos: pocos, con corteza fotografiada, algo torcidos, de grosor irregular y con los extremos partidos
+  const texL = new THREE.TextureLoader(), barkTex = (f, srgb) => { const t = texL.load('assets/tex/' + f); t.wrapS = t.wrapT = THREE.RepeatWrapping; if (srgb) t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; };
+  const barkMat = new THREE.MeshStandardMaterial({ map: barkTex('bark_brown_02_diff.jpg', true), normalMap: barkTex('bark_brown_02_nor_gl.jpg'), normalScale: new THREE.Vector2(1.6, 1.6), color: 0x8f8375, roughness: 0.82 });
+  const endMat = new THREE.MeshStandardMaterial({ color: 0x8a7350, roughness: 1 });
+  const logGeo = (r0, L, seed, stub) => {
+    const NS = 18, NR = 14, pos = [], uv = [], idx = [], bend = R(-0.06, 0.06) * L, bend2 = R(-0.03, 0.03) * L;
+    const rad = (u, a) => r0 * (1 - 0.22 * u) * (1 + 0.10 * Math.sin(u * 11 + seed) + 0.07 * Math.sin(a * 3 + u * 6 + seed * 2) + 0.05 * Math.sin(a * 7 - u * 17 + seed));
+    for (let i = 0; i <= NS; i++) for (let j = 0; j <= NR; j++) {
+      const u = i / NS, a = j / NR * TAU, r = rad(u, a), end = i === 0 || i === NS ? R(-0.5, 0.5) * r0 : 0;   // extremo astillado
+      pos.push((u - 0.5) * L + end, Math.cos(a) * r + bend2 * Math.sin(u * Math.PI * 2), Math.sin(a) * r + bend * Math.sin(u * Math.PI));
+      uv.push(j / NR * 2, u * L / (TAU * r0) * 2);
+    }
+    for (let i = 0; i < NS; i++) for (let j = 0; j < NR; j++) { const k = i * (NR + 1) + j; idx.push(k, k + 1, k + NR + 1, k + 1, k + NR + 2, k + NR + 1); }
+    const nBark = idx.length;
+    for (const [i, x] of [[0, -0.5 * L], [NS, 0.5 * L]]) {   // tapas: la madera clara del corte
+      const c = pos.length / 3; pos.push(x + R(-0.2, 0.2) * r0, bend2 * Math.sin(i / NS * Math.PI * 2), bend * Math.sin(i / NS * Math.PI)); uv.push(0.5, 0.5);
+      for (let j = 0; j < NR; j++) { const k = i * (NR + 1) + j; if (i === 0) idx.push(c, k + 1, k); else idx.push(c, k, k + 1); }
+    }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx);
+    g.addGroup(0, nBark, 0); g.addGroup(nBark, idx.length - nBark, 1); g.computeVertexNormals();
+    return g;
+  };
+  for (let i = 0; i < 2; i++) {
+    const r = R(0.04, 0.07), L = R(0.7, 1.3), log = new THREE.Group();
+    log.add(new THREE.Mesh(logGeo(r, L, i * 3.1 + 1), [barkMat, endMat]));
+    const st = new THREE.Mesh(logGeo(r * 0.38, r * R(2.2, 4), i + 5), [barkMat, endMat]);   // el muñón de una rama rota
+    st.position.set(R(-0.25, 0.25) * L, r * 0.6, R(-0.4, 0.4) * r); st.rotation.z = R(0.8, 1.3) * (Math.random() < 0.5 ? 1 : -1); st.rotation.y = R(-0.6, 0.6); log.add(st);
+    addFloater(log, { sink: r * 0.22, ax: 0.07, rz: R(-0.015, 0.015), minD: 7 });   // medio hundidos: asoma algo más de la mitad
   }
   // manojos de caña seca
   const caneMat = new THREE.MeshStandardMaterial({ color: 0xa08a52, roughness: 0.8 });
@@ -45,10 +66,11 @@ export function createSurface({ scene, groundY, EYE, loadGLTF, perches, waveY })
   // ramas escaneadas
   loadGLTF('assets/dry_branches_medium_01/dry_branches_medium_01.gltf').then(g => {
     const src = []; g.scene.traverse(m => { if (m.isMesh) src.push(m); });
-    for (let i = 0; i < 5; i++) {
-      const s = src[i % src.length], m = new THREE.Mesh(s.geometry, s.material);
-      m.scale.setScalar(R(0.3, 0.8));
-      addFloater(m, { sink: -0.01, rx: R(-0.06, 0.06), ax: 0.02, minD: 5 });
+    // ramas finas de verdad (escaneadas), a tamaño natural: cada una girada a su manera y medio hundida, con las puntas asomando
+    for (let i = 0; i < 9; i++) {
+      const s = src[i % src.length], m = new THREE.Mesh(s.geometry, s.material), k = R(0.65, 1.35);
+      m.scale.set(k, k * R(0.55, 0.8), k);   // algo aplastadas: una rama flotando queda tumbada
+      addFloater(m, { sink: -0.004 * k, rx: R(-0.04, 0.04), rz: R(0, TAU), ax: 0.015, minD: i < 3 ? 3.5 : 5 });
     }
   }).catch(e => console.error(e));
   // hojas
@@ -62,7 +84,7 @@ export function createSurface({ scene, groundY, EYE, loadGLTF, perches, waveY })
   leaves.frustumCulled = false; scene.add(leaves);
 
   const drift = (f, t, dt, wind) => {
-    const v = 0.035 * wind * f.speed;
+    const v = 0.010 * wind * f.speed;   // deriva apenas perceptible: en la laguna no hay corriente
     f.x += (v + 0.012 * Math.sin(t * 0.07 + f.ph)) * dt; f.z += (v * 0.18 + 0.010 * Math.sin(t * 0.05 + f.ph * 2)) * dt;
     f.yaw += f.spin * dt;
     const D = EYE.z - f.z;

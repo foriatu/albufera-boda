@@ -10,3 +10,8 @@ garza.mp3 — «Ardea cinerea - Grey Heron XC432231.mp3», Joost van Bruggen, CC
 gaviota.mp3 — «Yellow-legged Gull - Larus michahellis michahellis.ogg», Cedric MROCZKO, CC BY-SA 4.0, https://commons.wikimedia.org/wiki/File:Yellow-legged_Gull_-_Larus_michahellis_michahellis.ogg
 charran.mp3 — «Sterna-hirundo-002.ogg», No machine-readable author provided. Mdf assumed (based on copyright claims)., CC BY-SA 3.0, https://commons.wikimedia.org/wiki/File:Sterna-hirundo-002.ogg
 cormoran.mp3 — «Cormorán grande (Phalacrocorax carbo).mp3», Sonothèque ADVL, CC0, https://commons.wikimedia.org/wiki/File:Cormor%C3%A1n_grande_(Phalacrocorax_carbo).mp3
+trueno1.mp3 — «Thunder 01.ogg», Amuzujoe, CC BY-SA 4.0, https://commons.wikimedia.org/wiki/File:Thunder_01.ogg
+trueno2.mp3 — «Thunder crack 2B.ogg», Jud McCranie, CC BY-SA 4.0, https://commons.wikimedia.org/wiki/File:Thunder_crack_2B.ogg
+trueno3.mp3 — «Nosferatu thunderclap - Richard Humphries.wav», Richard Humphries, CC BY 4.0, https://commons.wikimedia.org/wiki/File:Nosferatu_thunderclap_-_Richard_Humphries.wav
+pato.mp3 — «Anas platyrhynchos - Mallard XC112828.mp3», Jonathon Jongsma, CC BY-SA 3.0, https://commons.wikimedia.org/wiki/File:Anas_platyrhynchos_-_Mallard_XC112828.mp3
+pato2.mp3 — «Anas platyrhynchos - Mallard XC518422.mp3», Marie-Lan Taÿ Pamart, CC BY-SA 4.0, https://commons.wikimedia.org/wiki/File:Anas_platyrhynchos_-_Mallard_XC518422.mp3

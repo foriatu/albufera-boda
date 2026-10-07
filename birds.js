@@ -408,7 +408,7 @@ export function createBirds(ctx) {
       if (s.yaw !== undefined) this.yawT = s.yaw; else this.yawT = this.yaw;
       [this.hipT, this.kneeT] = this.legStand; this.effort = 1; this.amp = 1;
       if (s.kind === 'swim') { this.enter('swim', t); this.wT = 0; this.setPose('swim', 5); this.dives = Math.floor(R(2, 5)); this.until = t + R(4, 9); doSplash(this.pos.x, this.pos.z, t, 0.6); return; }
-      this.wT = 0; this.setPose('stand', 4); this.leaveAt = t + (this.kind === 'tern' ? R(15, 50) : R(55, 170));
+      this.wT = 0; this.setPose('stand', 2.5); this.leaveAt = t + (this.kind === 'tern' ? R(15, 50) : R(55, 170));
       if (s.kind === 'wade') { this.enter('wade', t); this.sub = 'still'; this.subUntil = t + R(4, 12); ripple(this.pos.x, this.pos.z, t); }
       else { this.enter('perch', t); this.dryAt = this.kind === 'cormorant' ? t + (this.wet ? R(2, 6) : R(18, 45)) : Infinity; this.wet = false; }
     }
@@ -418,7 +418,7 @@ export function createBirds(ctx) {
       // Empieza a llover: lo dejan todo y se marchan; no vuelven hasta que escampa
       if (storm && this.state !== 'away' && !this.fleeing && !['under', 'dunk', 'plunge', 'takeoff'].includes(this.state)) {
         this.fleeing = true; this.dry = false; this.busy = false; this.sub = null; this.diving = 0;
-        if (this.state === 'fly' || this.state === 'hover' || this.state === 'land') { if (this.spot) { this.spot.taken = false; this.spot = null; } this.leave(t); }
+        if (this.state === 'fly' || this.state === 'hover' || this.state === 'land' || this.state === 'touch') { if (this.spot) { this.spot.taken = false; this.spot = null; } this.leave(t); }
         else this.takeoff(tt => this.leave(tt), t);
       }
       if (!storm) this.fleeing = false;
@@ -438,8 +438,26 @@ export function createBirds(ctx) {
           tmp2.copy(this.target); const d0 = tmp2.distanceTo(this.pos);
           if (d0 > 6) tmp2.y += Math.min(3, d0 * 0.22);
           const d = this.steer(tmp2, clamp(d0 * 1.1, 0.9, sp.cruise), 14, dt);
-          if (d0 < 3) { this.setPose('flare', 5); this.effort = 1.7; this.amp = 1.15; this.hipT = -0.5; this.kneeT = 0.3; this.pitch = -0.25; } else this.amp = 1;
-          if (d0 < 0.2 || (d0 < 0.6 && d > d0 + 0.5)) this.settle(t);
+          if (d0 < 3) {   // frenada: el cuerpo se va levantando poco a poco, no de golpe
+            this.setPose('flare', 3); this.effort = 1.7; this.amp = 1.15; this.hipT = -0.5; this.kneeT = 0.3;
+            this.flare = Math.min(1, (this.flare || 0) + 1.6 * dt); this.pitch += (-0.25 - this.pitch) * this.flare * Math.min(1, 5 * dt);
+          } else { this.amp = 1; this.flare = 0; }
+          // último metro: deja de perseguir el punto y se posa con una curva suave que parte de la velocidad que trae
+          if (d0 < 1.0) {
+            this.enter('touch', t); this.from = this.pos.clone(); this.pitch0 = this.pitch; this.roll0 = this.roll; this.flare = 0;
+            this.touchT = clamp(3 * d0 / Math.max(this.vel.length(), 0.5), 0.7, 1.5);
+          }
+          break;
+        }
+        case 'touch': {
+          const k = Math.min(1, (t - this.tS) / this.touchT), e = 1 - Math.pow(1 - k, 3);
+          this.pos.lerpVectors(this.from, this.target, e);
+          this.pos.y += 0.05 * Math.sin(Math.PI * k) * (1 - k);   // un último remonte mínimo antes de dejarse caer
+          this.pitch = this.pitch0 * (1 - k * k); this.roll = this.roll0 * (1 - e);
+          this.amp = 1.15 - 0.75 * k; this.effort = 1.7 - 0.5 * k;
+          if (k > 0.35) [this.hipT, this.kneeT] = this.legStand;   // estira las patas hacia el posadero
+          if (k > 0.75) this.wT = 0.5;                              // y empieza a recoger las alas
+          if (k >= 1) this.settle(t);
           break;
         }
         case 'takeoff':
@@ -567,10 +585,13 @@ export function createBirds(ctx) {
 
       // alas
       this.w += (this.wT - this.w) * Math.min(1, 4 * dt);
-      const flying = this.state === 'fly' || this.state === 'land' || this.state === 'takeoff' || this.state === 'hover' || this.state === 'plunge';
-      if (flying) this.phase += dt * TAU * sp.flapHz * this.effort;
+      const flying = this.state === 'fly' || this.state === 'land' || this.state === 'touch' || this.state === 'takeoff' || this.state === 'hover' || this.state === 'plunge';
+      // el aleteo no se corta en seco al posarse: se apaga en unas décimas mientras el ala se pliega
+      this.flapK = (this.flapK ?? 0) + ((flying ? 1 : 0) - (this.flapK ?? 0)) * Math.min(1, (flying ? 12 : 3.5) * dt);
+      const fk = this.flapK < 0.01 ? 0 : this.flapK;
+      if (fk) this.phase += dt * TAU * sp.flapHz * this.effort * (flying ? 1 : 0.6);
       const A = sp.flapA * this.amp, s = Math.sin(this.phase);
-      let inner = flying ? A * s + 0.08 : 0, outer = flying ? A * 0.7 * Math.sin(this.phase - 1.0) - 0.12 - Math.max(0, -Math.cos(this.phase)) * 0.3 * this.amp : 0;
+      let inner = fk * (A * s + 0.08), outer = fk * (A * 0.7 * Math.sin(this.phase - 1.0) - 0.12 - Math.max(0, -Math.cos(this.phase)) * 0.3 * this.amp);
       if (this.dry) { inner = 0.12 + 0.03 * Math.sin(t * 9); outer = -0.6; }
       if (this.state === 'plunge') { inner = 0.5; outer = -0.9; }
       poseWings(this.wings, this.w, inner, outer, this.dry);
@@ -583,7 +604,7 @@ export function createBirds(ctx) {
       const grounded = !flying;
       if (grounded && this.state !== 'swim') { this.pitch = 0; this.roll = 0; }
       this.root.rotation.set(this.pitch || 0, this.yaw, this.roll);
-      this.torso.position.y = flying ? -Math.cos(this.phase) * 0.018 * this.amp : 0;
+      this.torso.position.y = -Math.cos(this.phase) * 0.018 * this.amp * fk;
     }
   }
 

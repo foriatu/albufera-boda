@@ -90,6 +90,8 @@ class Water extends Mesh {
 					'uRain': { value: 0.0 },
 					'uWave': { value: 0.1 },
 					'trails': { value: [ new Vector4(), new Vector4(), new Vector4(), new Vector4() ] },
+					'duckW': { value: [ new Vector4(), new Vector4() ] },
+					'duckR': { value: [ new Vector4( 0, 0, - 100, 0 ), new Vector4( 0, 0, - 100, 0 ), new Vector4( 0, 0, - 100, 0 ), new Vector4( 0, 0, - 100, 0 ), new Vector4( 0, 0, - 100, 0 ), new Vector4( 0, 0, - 100, 0 ) ] },
 					'ripples': { value: [ new Vector3( 0, 0, - 100 ), new Vector3( 0, 0, - 100 ), new Vector3( 0, 0, - 100 ), new Vector3( 0, 0, - 100 ), new Vector3( 0, 0, - 100 ), new Vector3( 0, 0, - 100 ) ] }
 				}
 			] ),
@@ -114,9 +116,9 @@ class Water extends Mesh {
 					vec3 r = vec3( 0.0 );
 					#define WAVE( dx, dz, lam, amp ) { float k = 6.2832 / lam; float th = dot( p, vec2( dx, dz ) ) * k - sqrt( 9.8 * k ) * t; float a = amp * ( 1.0 - smoothstep( lam * 6.0, lam * 14.0, dist ) ); r.x += a * sin( th ); r.yz += vec2( dx, dz ) * a * k * cos( th ); }
 					WAVE( 0.954, 0.300, 2.2, 0.020 )
-					WAVE( 0.800, 0.600, 1.5, 0.016 )
+					WAVE( - 0.600, 0.800, 1.5, 0.016 )
 					WAVE( 0.970, - 0.243, 0.95, 0.010 )
-					WAVE( 0.894, 0.447, 0.60, 0.006 )
+					WAVE( - 0.894, - 0.447, 0.60, 0.006 )
 					WAVE( 0.990, 0.141, 3.6, 0.016 )
 					return r;
 				}
@@ -167,6 +169,8 @@ class Water extends Mesh {
 					return d / max( r, 0.01 ) * sin( ( r - front ) * 55.0 ) * smoothstep( 0.06, 0.0, abs( r - front ) ) * ( 1.0 - ph );
 				}
 				uniform vec4 trails[ 4 ];    // x, z, rumbo, intensidad
+				uniform vec4 duckW[ 2 ];     // pato nadando: x, z, rumbo, velocidad
+				uniform vec4 duckR[ 6 ];     // anillo pequeño de un pato: x, z, instante, fuerza
 				uniform vec3 ripples[ 6 ];   // x, z, instante en que el pez toca la superficie
 
 				float groundY( vec2 p ) {
@@ -181,9 +185,9 @@ class Water extends Mesh {
 
 				vec4 getNoise( vec2 uv ) {
 					vec2 uv0 = ( uv / 103.0 ) + vec2(time / 17.0, time / 29.0);
-					vec2 uv1 = uv / 107.0-vec2( time / -19.0, time / 31.0 );
+					vec2 uv1 = uv / 107.0 - vec2( time / 19.0, time / 27.0 );   // en sentido contrario a la primera capa: el agua riela en el sitio, sin corriente
 					vec2 uv2 = uv / vec2( 8907.0, 9803.0 ) + vec2( time / 101.0, time / 97.0 );
-					vec2 uv3 = uv / vec2( 1091.0, 1027.0 ) - vec2( time / 109.0, time / -113.0 );
+					vec2 uv3 = uv / vec2( 1091.0, 1027.0 ) - vec2( time / 109.0, time / 113.0 );
 					vec4 noise = texture2D( normalSampler, uv0 ) +
 						texture2D( normalSampler, uv1 ) +
 						texture2D( normalSampler, uv2 ) +
@@ -253,6 +257,33 @@ class Water extends Mesh {
 								// abultamiento del agua sobre la cabeza
 								rip += dv * exp( - dot( dv, dv ) / 0.02 ) * tr.w * 4.0;
 							}
+						}
+					}
+					// patos: estela en V fina y corta (ángulo de Kelvin, ~19°), la ola de proa alrededor del cuerpo y anillos chicos al chapotear
+					for ( int i = 0; i < 2; i ++ ) {
+						vec4 dw = duckW[ i ];
+						if ( dw.w > 0.015 ) {
+							vec2 dv = worldPosition.xz - dw.xy, dir = vec2( cos( dw.z ), sin( dw.z ) );
+							float al = - dot( dv, dir ), ac = dv.y * dir.x - dv.x * dir.y, k = clamp( dw.w / 0.25, 0.0, 1.6 );
+							if ( al > - 0.3 && al < 1.8 && abs( ac ) < 0.8 ) {
+								float arm = 0.09 + al * 0.35, d1 = abs( ac ) - arm, wd = 0.018 + al * 0.025;
+								float env = exp( - d1 * d1 / ( wd * wd ) ) * exp( - al * 2.4 ) * smoothstep( - 0.05, 0.12, al ) * pow( 0.5 + 0.5 * sin( al * 48.0 - uT * 6.0 ), 2.0 );   // cada brazo, roto en crestas cortas
+								rip += vec2( - dir.y, dir.x ) * sign( ac ) * sin( d1 * 95.0 - al * 18.0 + uT * 4.0 ) * env * k * 0.40;
+								float inside = smoothstep( arm, arm * 0.4, abs( ac ) ) * exp( - al * 1.6 ) * step( 0.0, al );
+								rip += dir * sin( al * 70.0 - uT * 7.0 ) * inside * k * 0.10;
+							}
+							float r = length( dv );
+							rip += dv / max( r, 0.02 ) * sin( ( r - 0.16 ) * 80.0 ) * exp( - pow( ( r - 0.17 ) / 0.05, 2.0 ) ) * k * 0.35;
+						}
+					}
+					for ( int i = 0; i < 6; i ++ ) {
+						vec4 dr = duckR[ i ];
+						vec2 dv = worldPosition.xz - dr.xy;
+						float r = length( dv ), age = uT - dr.z;
+						if ( age > 0.0 && age < 2.6 && r < 1.0 ) {
+							float front = 0.06 + 0.30 * age;
+							float env = smoothstep( front + 0.03, front - 0.02, r ) * exp( - ( front - r ) * 6.0 ) * exp( - age * 1.5 );
+							rip += dv / max( r, 0.01 ) * sin( ( r - front ) * 70.0 ) * env * dr.w * 0.7;
 						}
 					}
 					float calm = ( 0.35 + 0.65 * smoothstep( 0.0, 0.25, depth ) ) * ( 1.0 + 0.7 * uRain );
